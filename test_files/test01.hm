@@ -1,0 +1,22 @@
+class Test {
+
+    Test:main(args) {
+        for (var i = 0; i < args.length; i++) {
+            this.print_arg(i, args[i]);
+        }
+    }
+
+    factorial(N) {
+        if (N > 1) {
+            return N * factorial(N-1);
+        }
+        else {
+            return 1;
+        }
+    }
+
+
+    factorial(N):validate ->
+        N >= 0.
+
+}
