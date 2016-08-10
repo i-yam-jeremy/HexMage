@@ -1,8 +1,8 @@
 CC = gcc
 TARGET = hexmage
 
-all: src/main.c src/hexmage.c src/lexer.c
-	$(CC) -o $(TARGET) src/main.c src/hexmage.c src/lexer.c
+all: src/main.c src/*.c
+	$(CC) -o $(TARGET) src/*.c
 
 clean:
 	$(RM) $(TARGET)

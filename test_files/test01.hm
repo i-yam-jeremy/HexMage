@@ -11,12 +11,12 @@ class Test {
             return N * factorial(N-1);
         }
         else {
-            return 1;
+            return 1.0;
         }
     }
 
 
     factorial(N):validate ->
-        N >= 0.
+        N >= 0 .
 
 }

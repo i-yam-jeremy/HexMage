@@ -15,9 +15,9 @@ typedef struct token {
     int size;
 } Token;
 
-typedef struct tokenlist {
+typedef struct token_list {
     Token token;
-    struct tokenlist* next;
+    struct token_list* next;
 } TokenList;
 
 TokenList* lex(char* code);

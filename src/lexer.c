@@ -34,7 +34,7 @@ TokenDef td(char* name,  char* regex) {
 TokenDef* get_token_definitions(int* token_definition_count) {
     TokenDef TOKEN_DEFS[] = {
         td("identifier", "[A-Za-z][A-Za-z0-9_]*"),
-        td("number", "[0-9][0-9]*"),
+        td("number", "[0-9][0-9]*\\.*[0-9]*"), // also matches "1...0" which I don't think will cause any problems, but it looks very weird
         td("whitespace", "[ \t][ \t]*"),
         td("\n", "\n"),
         td("{", "{"),

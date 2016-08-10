@@ -9,6 +9,7 @@
 #include "hexmage.h"
 
 #include "lexer.h"
+#include "parser.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,11 +34,12 @@ char* read_file(char* path) {
 int HexMage_compile(char* path) {
     char* code = read_file(path);
     TokenList* tokens = lex(code);
+    ASTNode ast = parse(tokens);
     
-    while (tokens != 0) {
+    /*while (tokens != 0) {
         printf("{'%s', '%.*s'}\n", tokens->token.name, tokens->token.size, tokens->token.value);
         tokens = tokens->next;
-    }
+    }*/
     
     return 0;
 }
