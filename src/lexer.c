@@ -32,7 +32,8 @@ TokenDef td(char* name,  char* regex) {
 
 TokenDef* get_token_definitions(int* token_definition_count) {
     TokenDef TOKEN_DEFS[] = {
-        td("identifier", "[A-Za-z][A-Za-z0-9_]*")
+        td("identifier", "[A-Za-z][A-Za-z0-9_]*"),
+        td("whitespace", "[ \t]+")
     };
     *token_definition_count = sizeof(TOKEN_DEFS)/sizeof(TokenDef);
     return TOKEN_DEFS;
