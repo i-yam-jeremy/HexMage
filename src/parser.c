@@ -8,6 +8,7 @@
 
 #include "parser.h"
 
+#include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
@@ -181,21 +182,20 @@ int node_list_length(NodeList* nodes) {
     return length;
 }
 
-NodeList* remove_nodes(NodeList* nodes, int items_to_remove) {
+void remove_nodes(NodeList** nodes, NodeList* sublist, int items_to_remove) {
     
-    NodeList* current = nodes;
+    NodeList* current = sublist;
     
     while ((current != 0) && (items_to_remove > 0)) {
         current = current->next;
         items_to_remove--;
     }
     
-    if (nodes->prev) {
-        nodes->prev->next = current;
-        return 0; // If removing from not the beginning of list (which means there are previous items), just link items together
+    if (sublist->prev) {
+        sublist->prev->next = current; // If removing from not the beginning of list (which means there are previous items), just link items together
     }
     else {
-        return current; // If removing from beginning of list, the list start pointer changes, so return the list start pointer
+        *nodes = current; // If removing from beginning of list, the list start pointer changes, so change the list start pointer
     }
 }
 
@@ -215,70 +215,65 @@ void print_node_list(NodeList* nodes) {
     }
 }
 
+void check_rules(NodeList** nodes, NodeList* current, int i, int j, GrammarRule* grammar_rules, int grammar_rule_count) {
+    int match_window_size = j;
+    NodeList* match_window_start = current;
+    
+    for (int g = 0; g < grammar_rule_count; g++) {
+        GrammarRule rule = grammar_rules[g];
+        bool match = rule.check(match_window_start, match_window_size);
+        
+        if (match) {
+            remove_nodes(nodes, match_window_start, match_window_size);
+            
+            ASTNode ast_node;
+            ast_node.name = rule.name;
+            ast_node.children = match_window_start;
+            ast_node.child_count = match_window_size;
+            
+            Node node;
+            node.type = TYPE_ASTNODE;
+            node.ast_node = ast_node;
+            
+            NodeList* new_nodes = (NodeList*) malloc(sizeof(NodeList));
+            new_nodes->node = node;
+            new_nodes->prev = 0;
+            new_nodes->next = 0;
+            
+            if (match_window_start->prev == 0) { // match window is at start of list
+                new_nodes->prev = 0;
+                new_nodes->next = *nodes;
+                *nodes = new_nodes;
+            }
+            else {
+                new_nodes->prev = match_window_start->prev;
+                
+                if (new_nodes->prev->next != 0) {
+                    new_nodes->prev->next->prev = new_nodes;
+                    new_nodes->next = new_nodes->prev->next;
+                }
+                
+                new_nodes->prev->next = new_nodes;
+            }
+            break;
+        }
+    }
+}
+
 ASTNode parse_grammar(TokenList* tokens, GrammarRule* grammar_rules, int grammar_rule_count) {
     
-    printf("Before converting to NodeList\n");
     NodeList* nodes = to_node_list(0, tokens);
-    printf("Done converting to NodeList\n");
     
     NodeList* current = nodes;
     
-    while ((nodes->next != 0) || (nodes->node.type != TYPE_ASTNODE)) {
-        printf("--------------------------------\n");
-        print_node_list(nodes);
-        printf("--------------------------------\n");
+    while ((nodes->next != 0) || (nodes->node.type != TYPE_ASTNODE) || (strcmp(nodes->node.ast_node.name, "expression") != 0)) {
         for (int i = 0; i < node_list_length(nodes); i++) {
-            for (int j = 1; j < node_list_length(nodes) - i; j++) {
-                //printf("i: %d, j: %d, nodes: %d\n", i, j, node_list_length(nodes));
-                int match_window_size = j;
-                NodeList* match_window_start = current;
-                
-                for (int g = 0; g < grammar_rule_count; g++) {
-                    GrammarRule rule = grammar_rules[g];
-                    bool match = rule.check(match_window_start, match_window_size);
-                    
-                    if (match) {
-                        NodeList* n = remove_nodes(match_window_start, match_window_size);
-                        if (n != 0) {
-                            nodes = n;
-                        }
-                        
-                        ASTNode ast_node;
-                        ast_node.name = rule.name;
-                        ast_node.children = match_window_start;
-                        ast_node.child_count = match_window_size;
-                        
-                        Node node;
-                        node.type = TYPE_ASTNODE;
-                        node.ast_node = ast_node;
-                        
-                        NodeList* new_nodes = (NodeList*) malloc(sizeof(NodeList));
-                        new_nodes->node = node;
-                        new_nodes->prev = 0;
-                        new_nodes->next = 0;
-                        
-                        if (match_window_start->prev == 0) { // match window is at start of list
-                            new_nodes->prev = 0;
-                            new_nodes->next = nodes;
-                            nodes = new_nodes;
-                            //printf("nodes: %d\n", node_list_length(new_nodes));
-                        }
-                        else {
-                            new_nodes->prev = match_window_start->prev;
-                            
-                            if (new_nodes->prev->next != 0) {
-                                new_nodes->prev->next->prev = new_nodes;
-                                new_nodes->next = new_nodes->prev->next;
-                            }
-                            
-                            new_nodes->prev->next = new_nodes;
-                        }
-                    }
-                }
-                current = current->next;
+            for (int j = 1; j <= node_list_length(nodes) - i; j++) {
+                check_rules(&nodes, current, i, j, grammar_rules, grammar_rule_count);
             }
-            current = nodes;
+            current = current->next;
         }
+        current = nodes;
     }
     
     return nodes->node.ast_node;

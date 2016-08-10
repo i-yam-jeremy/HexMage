@@ -32,17 +32,19 @@ char* read_text_file(char* path) {
     }
 }
 
-int HexMage_compile(char* path) {
+ASTNode parse_file(char* path) {
     char* code = read_text_file(path);
-    printf("Done reading file\n");
+    printf("[Done reading file '%s']\n", path);
     TokenList* tokens = lex(code);
-    printf("Done lexing\n");
+    printf("[Done lexing '%s']\n", path);
     ASTNode ast = parse(tokens);
-    
-    /*while (tokens != 0) {
-        printf("{'%s', '%.*s'}\n", tokens->token.name, tokens->token.size, tokens->token.value);
-        tokens = tokens->next;
-    }*/
+    printf("[Done parsing '%s']\n", path);
+    return ast;
+}
+
+
+int HexMage_compile(char* path) {
+    ASTNode ast = parse_file(path);
     
     return 0;
 }
