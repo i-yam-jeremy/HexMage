@@ -62,9 +62,7 @@ TokenDef* get_token_definitions(int* token_definition_count) {
     return token_definitions;
 }
 
-Token get_next_token(char* code, TokenDef* token_definitions, int token_definition_count) {
-    Token t;
-    
+Token get_next_token(char* code, TokenDef* token_definitions, int token_definition_count, int line, int column) {
     for (int i = 0; i < token_definition_count; i++) {
         TokenDef def = token_definitions[i];
         regmatch_t matches[1];
@@ -72,6 +70,7 @@ Token get_next_token(char* code, TokenDef* token_definitions, int token_definiti
         if (!err) {
             regmatch_t match = matches[0];
             if (match.rm_so == 0) {
+                Token t;
                 t.name = def.name;
                 t.value = code;
                 t.size = match.rm_eo - match.rm_so;
@@ -89,21 +88,36 @@ Token get_next_token(char* code, TokenDef* token_definitions, int token_definiti
         }
     }
     
-    return t;
+    fprintf(stderr, "Invalid token:%d:%d: \n", line, column);
+    exit(1);
 }
 
 TokenList* lex(char* code) {
     int token_definition_count;
     TokenDef* token_definitions = get_token_definitions(&token_definition_count);
     TokenList* tokens = (TokenList*) malloc(sizeof(TokenList));
+    tokens->next = 0;
     TokenList* current = tokens;
     
-    while (code[0] != '\0') { // while (strlen(code) > 0) // but more efficient
-        Token token = get_next_token(code, token_definitions, token_definition_count);
+    int line = 1;
+    int column = 1;
+    
+    while (code[0] != '\0') { // while (strlen(code) > 0) { // but more efficient
+        Token token = get_next_token(code, token_definitions, token_definition_count, line, column);
+        if (strcmp(token.name, "\n") == 0) {
+            line++;
+            column = 0;
+        }
+        else {
+            column += token.size;
+        }
         code += token.size;
-        current->next = (TokenList*) malloc(sizeof(TokenList));
-        current->next->token = token;
-        current = current->next;
+        if ((strcmp(token.name, "whitespace") != 0) && (strcmp(token.name, "\n") != 0)) {
+            current->next = (TokenList*) malloc(sizeof(TokenList));
+            current->next->token = token;
+            current->next->next = 0;
+            current = current->next;
+        }
     }
     
     return tokens->next;

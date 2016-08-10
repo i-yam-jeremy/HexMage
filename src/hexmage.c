@@ -14,13 +14,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-char* read_file(char* path) {
+char* read_text_file(char* path) {
     FILE* f = fopen(path, "r");
     if (f) {
         fseek(f, 0, SEEK_END);
         long size = ftell(f);
         fseek(f, 0, SEEK_SET);
-        char* content = malloc(size);
+        char* content = malloc(size+1);
+        content[size] = '\0';
         fread(content, sizeof(char), size, f);
         fclose(f);
         return content;
@@ -32,8 +33,10 @@ char* read_file(char* path) {
 }
 
 int HexMage_compile(char* path) {
-    char* code = read_file(path);
+    char* code = read_text_file(path);
+    printf("Done reading file\n");
     TokenList* tokens = lex(code);
+    printf("Done lexing\n");
     ASTNode ast = parse(tokens);
     
     /*while (tokens != 0) {

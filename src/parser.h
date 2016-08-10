@@ -11,18 +11,30 @@
 
 #include "lexer.h"
 
-struct ast_node_list;
+#define TYPE_ASTNODE 1
+#define TYPE_TOKEN 2
+
+struct node_list;
 
 typedef struct ast_node {
-    struct ast_node_list* children;
+    struct node_list* children;
+    int child_count;
     char* name;
-    void* data;
 } ASTNode;
 
-typedef struct ast_node_list {
-    ASTNode node;
-    struct ast_node_list* next;
-} ASTNodeList;
+typedef struct node {
+    int type;
+    union {
+        ASTNode ast_node;
+        Token token;
+    };
+} Node;
+
+typedef struct node_list {
+    Node node;
+    struct node_list* next;
+    struct node_list* prev;
+} NodeList;
 
 ASTNode parse(TokenList* tokens);
 
