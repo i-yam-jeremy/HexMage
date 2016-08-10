@@ -11,6 +11,7 @@
 #include <regex.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 typedef struct tokendef {
     char* name;
@@ -23,7 +24,7 @@ TokenDef td(char* name,  char* regex) {
     int err = regcomp(&def.regex, regex, 0);
     
     if (err) {
-        fprintf(stderr, "Could not compile regex for token definition '%s'.", name);
+        fprintf(stderr, "Could not compile regex for token definition '%s'.\n", name);
         exit(1);
     }
     
@@ -33,30 +34,77 @@ TokenDef td(char* name,  char* regex) {
 TokenDef* get_token_definitions(int* token_definition_count) {
     TokenDef TOKEN_DEFS[] = {
         td("identifier", "[A-Za-z][A-Za-z0-9_]*"),
-        td("whitespace", "[ \t]+")
+        td("number", "[0-9][0-9]*"),
+        td("whitespace", "[ \t][ \t]*"),
+        td("\n", "\n"),
+        td("{", "{"),
+        td("}", "}"),
+        td("[", "\\["),
+        td("]", "\\]"),
+        td("(", "("),
+        td(")", ")"),
+        td("+", "\\+"),
+        td("-", "\\-"),
+        td("*", "\\*"),
+        td("/", "\\/"),
+        td("%", "\\%"),
+        td(">", "\\>"),
+        td("<", "\\<"),
+        td("=", "\\="),
+        td(".", "\\."),
+        td(",", "\\,"),
+        td(";", "\\;"),
+        td(":", "\\:")
     };
+    TokenDef* token_definitions = (TokenDef*) malloc(sizeof(TOKEN_DEFS));
+    memcpy(token_definitions, TOKEN_DEFS, sizeof(TOKEN_DEFS));
     *token_definition_count = sizeof(TOKEN_DEFS)/sizeof(TokenDef);
-    return TOKEN_DEFS;
+    return token_definitions;
 }
 
 Token get_next_token(char* code, TokenDef* token_definitions, int token_definition_count) {
     Token t;
-    t.name = "Test";
-    t.value = "testvalue"; //TODO FIXME
+    
+    for (int i = 0; i < token_definition_count; i++) {
+        TokenDef def = token_definitions[i];
+        regmatch_t matches[1];
+        int err = regexec(&def.regex, code, 1, matches, 0);
+        if (!err) {
+            regmatch_t match = matches[0];
+            if (match.rm_so == 0) {
+                t.name = def.name;
+                t.value = code;
+                t.size = match.rm_eo - match.rm_so;
+                return t;
+            }
+            else {
+                continue;
+            }
+        }
+        else if (err == REG_NOMATCH) {
+            continue;
+        }
+        else {
+            fprintf(stderr, "Regex error: %d\n", err);
+        }
+    }
+    
     return t;
 }
 
 TokenList* lex(char* code) {
     int token_definition_count;
     TokenDef* token_definitions = get_token_definitions(&token_definition_count);
-    TokenList* tokens = 0;
+    TokenList* tokens = (TokenList*) malloc(sizeof(TokenList));
+    TokenList* current = tokens;
+    
     while (code[0] != '\0') { // while (strlen(code) > 0) // but more efficient
         Token token = get_next_token(code, token_definitions, token_definition_count);
-        code += strlen(token.value);
-        TokenList* new_tokens = (TokenList*) malloc(sizeof(TokenList));
-        new_tokens->token = token;
-        new_tokens->next = tokens;
-        tokens = new_tokens;
+        code += token.size;
+        current->next = (TokenList*) malloc(sizeof(TokenList));
+        current->next->token = token;
+        current = current->next;
     }
-    tokens;
+    
+    return tokens->next;
 }

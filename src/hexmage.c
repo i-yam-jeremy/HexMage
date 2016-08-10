@@ -34,5 +34,10 @@ int HexMage_compile(char* path) {
     char* code = read_file(path);
     TokenList* tokens = lex(code);
     
+    while (tokens != 0) {
+        printf("{'%s', '%.*s'}\n", tokens->token.name, tokens->token.size, tokens->token.value);
+        tokens = tokens->next;
+    }
+    
     return 0;
 }

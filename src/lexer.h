@@ -12,6 +12,7 @@
 typedef struct token {
     char* name;
     char* value;
+    int size;
 } Token;
 
 typedef struct tokenlist {
