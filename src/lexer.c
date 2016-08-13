@@ -14,17 +14,17 @@
 #include <stdlib.h>
 
 typedef struct tokendef {
-    char* name;
+    TokenType type;
     regex_t regex;
 } TokenDef;
 
-TokenDef td(char* name,  char* regex) {
+TokenDef td(TokenType type,  char* regex) {
     TokenDef def;
-    def.name = name;
+    def.type = type;
     int err = regcomp(&def.regex, regex, 0);
     
     if (err) {
-        fprintf(stderr, "Could not compile regex for token definition '%s'.\n", name);
+        fprintf(stderr, "Could not compile regex for token definition '%d'.\n", type);
         exit(1);
     }
     
@@ -33,28 +33,28 @@ TokenDef td(char* name,  char* regex) {
 
 TokenDef* get_token_definitions(int* token_definition_count) {
     TokenDef TOKEN_DEFS[] = {
-        td("identifier", "[A-Za-z][A-Za-z0-9_]*"),
-        td("number", "[0-9][0-9]*\\.*[0-9]*"), // also matches "1...0" which I don't think will cause any problems, but it looks very weird
-        td("whitespace", "[ \t][ \t]*"),
-        td("\n", "\n"),
-        td("{", "{"),
-        td("}", "}"),
-        td("[", "\\["),
-        td("]", "\\]"),
-        td("(", "("),
-        td(")", ")"),
-        td("+", "\\+"),
-        td("-", "\\-"),
-        td("*", "\\*"),
-        td("/", "\\/"),
-        td("%", "\\%"),
-        td(">", "\\>"),
-        td("<", "\\<"),
-        td("=", "\\="),
-        td(".", "\\."),
-        td(",", "\\,"),
-        td(";", "\\;"),
-        td(":", "\\:")
+        td(identifier, "[A-Za-z][A-Za-z0-9_]*"),
+        td(number, "[0-9][0-9]*\\.*[0-9]*"), // also matches "1...0" which I don't think will cause any problems, but it looks very weird
+        td(whitespace, "[ \t][ \t]*"),
+        td(new_line, "\n"),
+        td(l_curly, "{"),
+        td(r_curly, "}"),
+        td(l_square, "\\["),
+        td(r_square, "\\]"),
+        td(l_paren, "("),
+        td(r_paren, ")"),
+        td(plus, "\\+"),
+        td(dash, "\\-"),
+        td(star, "\\*"),
+        td(forward_slash, "\\/"),
+        td(percent, "\\%"),
+        td(r_arrow, "\\>"),
+        td(l_arrow, "\\<"),
+        td(equals, "\\="),
+        td(dot, "\\."),
+        td(comma, "\\,"),
+        td(semicolon, "\\;"),
+        td(colon, "\\:")
     };
     TokenDef* token_definitions = (TokenDef*) malloc(sizeof(TOKEN_DEFS));
     memcpy(token_definitions, TOKEN_DEFS, sizeof(TOKEN_DEFS));
@@ -71,7 +71,7 @@ Token get_next_token(char* code, TokenDef* token_definitions, int token_definiti
             regmatch_t match = matches[0];
             if (match.rm_so == 0) {
                 Token t;
-                t.name = def.name;
+                t.type = def.type;
                 t.value = code;
                 t.size = match.rm_eo - match.rm_so;
                 return t;
@@ -104,7 +104,7 @@ TokenList* lex(char* code) {
     
     while (code[0] != '\0') { // while (strlen(code) > 0) { // but more efficient
         Token token = get_next_token(code, token_definitions, token_definition_count, line, column);
-        if (strcmp(token.name, "\n") == 0) {
+        if (token.type == new_line) {
             line++;
             column = 0;
         }
@@ -112,7 +112,7 @@ TokenList* lex(char* code) {
             column += token.size;
         }
         code += token.size;
-        if ((strcmp(token.name, "whitespace") != 0) && (strcmp(token.name, "\n") != 0)) {
+        if ((token.type != whitespace) && (token.type != new_line)) {
             current->next = (TokenList*) malloc(sizeof(TokenList));
             current->next->token = token;
             current->next->next = 0;

@@ -19,29 +19,71 @@
 typedef bool (*GrammarRuleCheckFunction)(NodeList* match_window, int match_window_size);
 
 typedef struct grammar_rule {
-    char* name;
+    ASTNodeType type;
     GrammarRuleCheckFunction check;
 } GrammarRule;
 
-GrammarRule gr(char* name, GrammarRuleCheckFunction check) {
+GrammarRule gr(ASTNodeType type, GrammarRuleCheckFunction check) {
     GrammarRule rule;
-    rule.name = name;
+    rule.type = type;
     rule.check = check;
     return rule;
 }
 
 /*
  
- Token(number)
+ Checks if an ASTNode is a given type including recursively (if an ASTNode has one child, it is a wrapper around it's only child, so it is essentially the same node. For example, a number literal is technically an expression, but the tree looks like this or something similar
+            expression ->
+                add_expr ->
+                    mult_expr ->
+                        atom_expr ->
+                            Token(number)
+ 
+ */
+
+bool is_type_recursive(ASTNode node, ASTNodeType type) {
+    //printf("ASTNode{'%d'}\n", node.type);
+    if (node.child_count == 1) {
+        //printf("\tASTNode{'%d'}\n", node.type);
+        if (node.children->node.type == TYPE_ASTNODE) {
+            if (node.children->node.ast_node.type == type) {
+                return true;
+            }
+            else {
+                return is_type_recursive(node.children->node.ast_node, type);
+            }
+        }
+    }
+    
+    return false;
+}
+
+/*
+ 
+ // A number literal, variable, or an expression in parentheses.
+ 
+ Token(number|identifier) | ASTNode(paren_expr)
  
 */
-bool GR_number(NodeList* match_window, int match_window_size) {
+bool GR_atom_expr(NodeList* match_window, int match_window_size) {
     if (match_window_size == 1) {
         if (match_window->node.type == TYPE_TOKEN) {
             Token token = match_window->node.token;
-            if (strcmp(token.name, "number") == 0) {
+            if ((token.type == number) || (token.type == identifier)) {
                 return true;
             }
+        }
+        else if (match_window->node.type == TYPE_ASTNODE) {
+            ASTNode node = match_window->node.ast_node;
+            if (node.type == paren_expr) {
+                return true;
+            }
+            /*if (!is_type_recursive(node, atom_expr)) {
+                printf("Hi\n");
+                if (node.type == expression) {
+                    return true;
+                }
+            }*/
         }
     }
     return false;
@@ -49,18 +91,29 @@ bool GR_number(NodeList* match_window, int match_window_size) {
 
 /*
  
- ASTNode(expression) Token(operator_token_name) ASTNode(expression)
+ ASTNode(expression_subtype) Token(operator_token_type) ASTNode(expression_subtype)
  
 */
-bool grammar_rule_binary_operator(NodeList* match_window, int match_window_size, char* operator_token_name) {
+bool grammar_rule_binary_operator(NodeList* match_window, int match_window_size, TokenType operator_token_type, ASTNodeType* expression_subtypes, int expression_subtype_count) {
     if (match_window_size == 3) {
-        if ((match_window->node.type == TYPE_ASTNODE) &&
-            (strcmp(match_window->node.ast_node.name, "expression") == 0) &&
-            (match_window->next->node.type == TYPE_TOKEN) &&
-            (strcmp(match_window->next->node.token.name, operator_token_name) == 0) &&
-            (match_window->next->next->node.type == TYPE_ASTNODE) &&
-            (strcmp(match_window->next->next->node.ast_node.name, "expression") == 0)) {
-            return true;
+        for (int i = 0; i < expression_subtype_count; i++) {
+            ASTNodeType expression_subtype = expression_subtypes[i];
+            if ((match_window->node.type == TYPE_ASTNODE) &&
+                (match_window->node.ast_node.type == expression_subtype) &&
+                (match_window->next->node.type == TYPE_TOKEN) &&
+                (match_window->next->node.token.type == operator_token_type) &&
+                (match_window->next->next->node.type == TYPE_ASTNODE) &&
+                (match_window->next->next->node.ast_node.type == expression_subtype)) {
+                return true;
+            }
+        }
+    }
+    else if (match_window_size == 1) {
+        for (int i = 0; i < expression_subtype_count; i++) {
+            ASTNodeType expression_subtype = expression_subtypes[i];
+            if ((match_window->node.type == TYPE_ASTNODE) && (match_window->node.ast_node.type == expression_subtype)) {
+                return true;
+            }
         }
     }
     return false;
@@ -71,17 +124,27 @@ bool grammar_rule_binary_operator(NodeList* match_window, int match_window_size,
  ASTNode(expression) Token(+) ASTNode(expression)
  
  */
-bool GR_addition_expr(NodeList* match_window, int match_window_size) {
-    return grammar_rule_binary_operator(match_window, match_window_size, "+");
+bool GR_add_expr(NodeList* match_window, int match_window_size) {
+    ASTNodeType expression_subtypes[] = {
+        mult_expr,
+        div_expr,
+        mod_expr
+    };
+    return grammar_rule_binary_operator(match_window, match_window_size, plus, expression_subtypes, sizeof(expression_subtypes)/sizeof(ASTNodeType));
 }
-
+                
 /*
  
  ASTNode(expression) Token(-) ASTNode(expression)
  
  */
-bool GR_subtraction_expr(NodeList* match_window, int match_window_size) {
-    return grammar_rule_binary_operator(match_window, match_window_size, "-");
+bool GR_sub_expr(NodeList* match_window, int match_window_size) {
+    ASTNodeType expression_subtypes[] = {
+        mult_expr,
+        div_expr,
+        mod_expr
+    };
+    return grammar_rule_binary_operator(match_window, match_window_size, dash, expression_subtypes, sizeof(expression_subtypes)/sizeof(ASTNodeType));
 }
 
 /*
@@ -89,8 +152,15 @@ bool GR_subtraction_expr(NodeList* match_window, int match_window_size) {
  ASTNode(expression) Token(*) ASTNode(expression)
  
  */
-bool GR_multiplication_expr(NodeList* match_window, int match_window_size) {
-    return grammar_rule_binary_operator(match_window, match_window_size, "*");
+bool GR_mult_expr(NodeList* match_window, int match_window_size) {
+    ASTNodeType expression_subtypes[] = {
+        /*variable_expr,
+        number_literal_expr,
+        parentheses_expr*/
+        atom_expr
+    };
+    bool result = grammar_rule_binary_operator(match_window, match_window_size, star, expression_subtypes, sizeof(expression_subtypes)/sizeof(ASTNodeType));
+    return result;
 }
 
 /*
@@ -98,8 +168,14 @@ bool GR_multiplication_expr(NodeList* match_window, int match_window_size) {
  ASTNode(expression) Token(/) ASTNode(expression)
  
  */
-bool GR_division_expr(NodeList* match_window, int match_window_size) {
-    return grammar_rule_binary_operator(match_window, match_window_size, "/");
+bool GR_div_expr(NodeList* match_window, int match_window_size) {
+    ASTNodeType expression_subtypes[] = {
+        /*variable_expr,
+         number_literal_expr,
+         parentheses_expr*/
+        atom_expr
+    };
+    return grammar_rule_binary_operator(match_window, match_window_size, forward_slash, expression_subtypes, sizeof(expression_subtypes)/sizeof(ASTNodeType));
 }
 
 /*
@@ -107,8 +183,14 @@ bool GR_division_expr(NodeList* match_window, int match_window_size) {
  ASTNode(expression) Token(%) ASTNode(expression)
  
  */
-bool GR_modulus_expr(NodeList* match_window, int match_window_size) {
-    return grammar_rule_binary_operator(match_window, match_window_size, "%");
+bool GR_mod_expr(NodeList* match_window, int match_window_size) {
+    ASTNodeType expression_subtypes[] = {
+        /*variable_expr,
+         number_literal_expr,
+         parentheses_expr*/
+        atom_expr
+    };
+    return grammar_rule_binary_operator(match_window, match_window_size, percent, expression_subtypes, sizeof(expression_subtypes)/sizeof(ASTNodeType));
 }
 
 /*
@@ -117,20 +199,14 @@ bool GR_modulus_expr(NodeList* match_window, int match_window_size) {
  
  */
 bool GR_expression(NodeList* match_window, int match_window_size) {
-    char* types[] = {
-        "number",
-        "addition_expr",
-        "subtraction_expr",
-        "multiplication_expr",
-        "division_expr",
-        "modulus_expr",
-        "variable_expr",
-        "function_call_expr"
+    ASTNodeType types[] = {
+        add_expr,
+        sub_expr
     };
     if (match_window_size == 1) {
         if (match_window->node.type == TYPE_ASTNODE) {
             for (int i = 0; i < sizeof(types)/sizeof(char*); i++) {
-                if (strcmp(types[i], match_window->node.ast_node.name) == 0) {
+                if (types[i] == match_window->node.ast_node.type) {
                     return true;
                 }
             }
@@ -144,7 +220,7 @@ bool GR_expression(NodeList* match_window, int match_window_size) {
  Token(identifier)
  
  */
-bool GR_keyword(NodeList* match_window, int match_window_size) {
+/*bool GR_keyword(NodeList* match_window, int match_window_size) {
     if (match_window_size == 1) {
         if (match_window->node.type == TYPE_TOKEN) {
             Token token = match_window->node.token;
@@ -157,14 +233,14 @@ bool GR_keyword(NodeList* match_window, int match_window_size) {
         }
     }
     return false;
-}
+}*/
 
 /*
  
  Token(identifier)
 
 */
-bool GR_variable_expr(NodeList* match_window, int match_window_size) {
+/*bool GR_variable_expr(NodeList* match_window, int match_window_size) {
     if (match_window_size == 1) {
         if (match_window->node.type == TYPE_TOKEN) {
             Token token = match_window->node.token;
@@ -179,21 +255,21 @@ bool GR_variable_expr(NodeList* match_window, int match_window_size) {
         }
     }
     return false;
-}
+}*/
 
 /*
  
  Token("(") ASTNode(expression) Token(")")
  
  */
-bool GR_parenthesis_expr(NodeList* match_window, int match_window_size) {
+bool GR_paren_expr(NodeList* match_window, int match_window_size) {
     if (match_window_size == 3) {
         if ((match_window->node.type == TYPE_TOKEN) &&
-            (strcmp(match_window->node.token.name, "(") == 0) &&
+            (match_window->node.token.type == l_paren) &&
             (match_window->next->node.type == TYPE_ASTNODE) &&
-            (strcmp(match_window->next->node.ast_node.name, "expression") == 0) &&
+            (match_window->next->node.ast_node.type == expression) &&
             (match_window->next->next->node.type == TYPE_TOKEN) &&
-            (strcmp(match_window->next->next->node.token.name, ")") == 0)) {
+            (match_window->next->next->node.token.type == r_paren)) {
             return true;
         }
     }
@@ -208,27 +284,27 @@ bool GR_parenthesis_expr(NodeList* match_window, int match_window_size) {
 bool GR_function_call_expr(NodeList* match_window, int match_window_size) {
     if (match_window_size >= 3) {
         NodeList* nodes = match_window;
-        if ((nodes->node.type == TYPE_ASTNODE) && (strcmp(match_window->node.ast_node.name, "expression") == 0)) {
+        if ((nodes->node.type == TYPE_ASTNODE) && (match_window->node.ast_node.type == expression)) {
             nodes = nodes->next;
-            if ((nodes->node.type == TYPE_TOKEN) && (strcmp(nodes->node.token.name, "(") == 0)) {
+            if ((nodes->node.type == TYPE_TOKEN) && (nodes->node.token.type == r_paren)) {
                 nodes = nodes->next;
                 int arg_node_count = (match_window_size - 3); // - 3 because function expression, open paren, and close paren
                 int arg_count = (arg_node_count / 2) + (arg_node_count % 2);
                 
                 for (int i = 0; i < arg_count; i++) {
-                    if (!((nodes->node.type == TYPE_ASTNODE) && (strcmp(nodes->node.ast_node.name, "expression") == 0))) {
+                    if (!((nodes->node.type == TYPE_ASTNODE) && (nodes->node.ast_node.type == expression))) {
                         return false;
                     }
                     nodes = nodes->next;
                     if (i != arg_count-1) { // if not last argument
-                        if (!((nodes->node.type == TYPE_TOKEN) && (strcmp(nodes->node.token.name, ",") == 0))) {
+                        if (!((nodes->node.type == TYPE_TOKEN) && (nodes->node.token.type == comma))) {
                             return false;
                         }
                         nodes = nodes->next;
                     }
                 }
                 
-                if ((nodes->node.type == TYPE_TOKEN) && (strcmp(nodes->node.token.name, ")") == 0)) {
+                if ((nodes->node.type == TYPE_TOKEN) && (nodes->node.token.type == r_paren)) {
                     return true;
                 }
             }
@@ -240,17 +316,17 @@ bool GR_function_call_expr(NodeList* match_window, int match_window_size) {
 
 GrammarRule* get_grammar_rules(int* grammar_rule_count) {
     GrammarRule GRAMMAR_RULES[] = {
-        gr("number", GR_number),
-        gr("addition_expr", GR_addition_expr),
-        gr("subtraction_expr", GR_subtraction_expr),
-        gr("multiplication_expr", GR_multiplication_expr),
-        gr("division_expr", GR_division_expr),
-        gr("modulus_expr", GR_modulus_expr),
-        gr("keyword", GR_keyword),
+        gr(atom_expr, GR_atom_expr),
+        gr(mult_expr, GR_mult_expr),
+        gr(div_expr, GR_div_expr),
+        gr(mod_expr, GR_mod_expr),
+        gr(add_expr, GR_add_expr),
+        gr(sub_expr, GR_sub_expr),
+        /*gr("keyword", GR_keyword),
         gr("variable_expr", GR_variable_expr),
-        gr("parenthesis_expr", GR_parenthesis_expr),
-        gr("function_call_expr", GR_function_call_expr),
-        gr("expression", GR_expression)
+        gr("function_call_expr", GR_function_call_expr),z*/
+        gr(paren_expr, GR_paren_expr),
+        gr(expression, GR_expression)
     };
     GrammarRule* grammar_rules = (GrammarRule*) malloc(sizeof(GRAMMAR_RULES));
     memcpy(grammar_rules, GRAMMAR_RULES, sizeof(GRAMMAR_RULES));
@@ -308,7 +384,7 @@ void remove_nodes(NodeList** nodes, NodeList* sublist, int items_to_remove) {
 void print_node(Node node, int indentation);
 
 void print_ast_node(ASTNode node, int indentation) {
-    printf("ASTNode{'%s'}\n", node.name);
+    printf("ASTNode{'%d'}\n", node.type);
     NodeList* current_child = node.children;
     for (int i = 0; i < node.child_count; i++) {
         print_node(current_child->node, indentation+1);
@@ -317,7 +393,7 @@ void print_ast_node(ASTNode node, int indentation) {
 }
 
 void print_token(Token token) {
-    printf("Token{'%s', '%.*s'}\n", token.name, token.size, token.value);
+    printf("Token{'%d', '%.*s'}\n", token.type, token.size, token.value);
 }
 
 void print_node(Node node, int indentation) {
@@ -356,7 +432,7 @@ bool check_rules(NodeList** nodes, NodeList* current, int i, int j, GrammarRule*
             remove_nodes(nodes, match_window_start, match_window_size);
             
             ASTNode ast_node;
-            ast_node.name = rule.name;
+            ast_node.type = rule.type;
             ast_node.children = match_window_start;
             ast_node.child_count = match_window_size;
             
@@ -396,25 +472,68 @@ ASTNode parse_grammar(TokenList* tokens, GrammarRule* grammar_rules, int grammar
     
     NodeList* current = nodes;
     
-    while ((nodes->next != 0) || (nodes->node.type != TYPE_ASTNODE) || (strcmp(nodes->node.ast_node.name, "expression") != 0)) {
+    bool forward_pass = true;
+    
+    while ((nodes->next != 0) || (nodes->node.type != TYPE_ASTNODE) || (nodes->node.ast_node.type == expression)) {
         bool list_changed = false;
-        //print_node_list(nodes);
+        print_node_list(nodes);
+        if (forward_pass) {
+            printf("forward\n");
+        }
+        else {
+            printf("backward\n");
+        }
         for (int i = 0; i < node_list_length(nodes); i++) {
             for (int j = 1; j <= node_list_length(nodes) - i; j++) {
+                
+                if (!forward_pass) {
+                    for (int n = 0; n < j-1; n++) {
+                        current = current->prev;
+                    }
+                }
+                
                 bool match = check_rules(&nodes, current, i, j, grammar_rules, grammar_rule_count);
                 if (match) {
                     //printf("Matched: i: %d, j: %d\n", i, j);
                     list_changed = true;
                 }
+                
+                if (!forward_pass) {
+                    for (int n = 0; n < j-1; n++) {
+                        current = current->next;
+                    }
+                }
             }
-            current = current->next;
+            if (forward_pass) {
+                if (current->next != 0) {
+                    current = current->next;
+                }
+            }
+            else {
+                if (current->prev) {
+                    current = current->prev;
+                }
+            }
         }
-        current = nodes;
+        forward_pass = !forward_pass;
+        //current = nodes;
         
         if (!list_changed) {
             fprintf(stderr, "Error: could not parse.\n");
             print_node_list(nodes);
             fprintf(stderr, "Error: could not parse.\n");
+            int length = node_list_length(nodes);
+            for (int i = 0; i < length; i++) {
+                if (nodes->node.type == TYPE_ASTNODE) {
+                    if (is_type_recursive(nodes->node.ast_node, atom_expr)) {
+                        printf("true\n");
+                    }
+                    else {
+                        printf("false\n");
+                    }
+                }
+                nodes = nodes->next;
+            }
             exit(1);
         }
     }

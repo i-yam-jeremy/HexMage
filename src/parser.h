@@ -16,10 +16,21 @@
 
 struct node_list;
 
+typedef enum ast_node_type {
+    atom_expr,
+    mult_expr,
+    div_expr,
+    mod_expr,
+    add_expr,
+    sub_expr,
+    paren_expr,
+    expression
+} ASTNodeType;
+
 typedef struct ast_node {
     struct node_list* children;
     int child_count;
-    char* name;
+    ASTNodeType type;
 } ASTNode;
 
 typedef struct node {

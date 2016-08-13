@@ -9,8 +9,33 @@
 #ifndef ____lexer__
 #define ____lexer__
 
+typedef enum token_type {
+    identifier,
+    number,
+    whitespace,
+    new_line,
+    l_curly,
+    r_curly,
+    l_square,
+    r_square,
+    l_paren,
+    r_paren,
+    plus,
+    dash,
+    star,
+    forward_slash,
+    percent,
+    r_arrow,
+    l_arrow,
+    equals,
+    dot,
+    comma,
+    semicolon,
+    colon
+} TokenType;
+
 typedef struct token {
-    char* name;
+    TokenType type;
     char* value;
     int size;
 } Token;
